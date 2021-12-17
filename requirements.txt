@@ -1,0 +1,13 @@
+imageio==2.13.1
+kornia==0.6.2
+matplotlib==3.4.3
+numpy
+Pillow==8.4.0
+scikit_learn
+scipy
+scikit-image
+torch
+torchvision
+visdom==0.1.8.9
+wandb==0.12.7
+opencv-python

@@ -133,8 +133,12 @@ def context_index_bank(n_context, long_mem, N):
             idx[:n_context+t+1] = 0
         ll.append(idx)
     # "short" context    
+    #                                   N x n_context                           
+        # (1 x n_context)                                   (N, 1)
     ss = [(torch.arange(n_context)[None].repeat(N, 1) +  torch.arange(N)[:, None])[:, :]]
 
+    # list of [N x n_context]
+    # len = long_mem + 1
     return ll + ss
 
 

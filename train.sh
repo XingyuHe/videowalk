@@ -1,0 +1,16 @@
+python -W ignore code/train.py \
+--data-path /mnt/disks/disk1/xh2513/final_project/data/train/filelist.txt \
+--frame-aug grid \
+--dropout 0.1 \
+--clip-len 4 \
+--temp 0.05 \
+--model-type imagenet18 \
+--workers 16 \
+--batch-size 20  \
+--cache-dataset \
+--data-parallel \
+--visualize \
+--lr 0.0001 \
+--resume /mnt/disks/disk1/xh2513/final_project/videowalk/checkpoints/_drop0.1-len4-ftranscrop-fauggrid-optimadam-temp0.05-fdrop0.0-lr0.0001-mlp0/checkpoint.pth \
+--start-epoch 25 \
+--epochs 200

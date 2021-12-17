@@ -23,6 +23,8 @@ def main(args, vis):
     args.mapScale = test_utils.infer_downscale(model)
 
     args.use_lab = args.model_type == 'uvc'
+
+    # VOSDataset is data/vos.py
     dataset = (vos.VOSDataset if not 'jhmdb' in args.filelist  else jhmdb.JhmdbSet)(args)
     val_loader = torch.utils.data.DataLoader(dataset,
         batch_size=int(args.batchSize), shuffle=False, num_workers=args.workers, pin_memory=True)
@@ -64,6 +66,7 @@ def test(loader, model, args):
     
     for vid_idx, (imgs, imgs_orig, lbls, lbls_orig, lbl_map, meta) in enumerate(loader):
         t_vid = time.time()
+        # B x N x C x H x W
         imgs = imgs.to(args.device)
         B, N = imgs.shape[:2]
         assert(B == 1)
@@ -77,9 +80,14 @@ def test(loader, model, args):
             ##################################################################
             bsize = 5   # minibatch size for computing features
             feats = []
+            #                   N: length sequence
             for b in range(0, imgs.shape[1], bsize):
+                # B x C x bsize 
+                #                   B x C x bsize x H x W 
+                #                       B x bsize x C x H x W 
                 feat = model.encoder(imgs[:, b:b+bsize].transpose(1,2).to(args.device))
                 feats.append(feat.cpu())
+            # B x C x N
             feats = torch.cat(feats, dim=2).squeeze(1)
 
             if not args.no_l2:
@@ -101,8 +109,11 @@ def test(loader, model, args):
             t03 = time.time()
             
             # Prepare source (keys) and target (query) frame features
+            # list of [N x n_context]
             key_indices = test_utils.context_index_bank(n_context, args.long_mem, N - n_context)
+            # N x [n_context x [long_mem + 1]]
             key_indices = torch.cat(key_indices, dim=-1)           
+            # B x C x N x [n_context x [long_mem + 1]], B x C x N - n_context
             keys, query = feats[:, :, key_indices], feats[:, :, n_context:]
 
             # Make spatial radius mask TODO use torch.sparse
@@ -115,6 +126,7 @@ def test(loader, model, args):
             keys, query = keys.flatten(-2), query.flatten(-2)
 
             print('computing affinity')
+            # getting the weight and its correspndong index for label propagation
             Ws, Is = test_utils.mem_efficient_batched_affinity(query, keys, D, 
                         args.temperature, args.topk, args.long_mem, args.device)
             # Ws, Is = test_utils.batched_affinity(query, keys, D, 
@@ -128,12 +140,19 @@ def test(loader, model, args):
             ###################################################################
 
             maps, keypts = [], []
+            # N - n_context x C x [H x uH] where uH is the number of unique rows in each sample across color channels
             lbls[0, n_context:] *= 0 
+            # lbl_map uH x W -> W
+            # C x [H x uH]
             lbl_map, lbls = lbl_map[0], lbls[0]
+            # lbl_map is the row with the lowest value of pixel 
+            # lbls is the 1 hot vectors for all rows in the first image 
 
             for t in range(key_indices.shape[0]):
                 # Soft labels of source nodes
+                # [H x uH]
                 ctx_lbls = lbls[key_indices[t]].to(args.device)
+                # C x H x W
                 ctx_lbls = ctx_lbls.flatten(0, 2).transpose(0, 1)
 
                 # Weighted sum of top-k neighbours (Is is index, Ws is weight) 

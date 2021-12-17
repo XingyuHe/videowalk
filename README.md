@@ -1,4 +1,4 @@
-<h1 style='font-size: 1.6em'>Space-Time Correspondence as a Contrastive Random Walk</h1>
+ø<h1 style='font-size: 1.6em'>Space-Time Correspondence as a Contrastive Random Walk</h1>
 
 <!-- ![](https://github.com/ajabri/videowalk/raw/master/figs/teaser_animation.gif) -->
 <p align="center">
@@ -102,6 +102,21 @@ python test.py --filelist /path/to/davis/vallist.txt \
 --topk 10 --videoLen 20 --radius 12  --temperature 0.05  --cropSize -1
 ```
 
+comment on test.py arguments
+--filelist 
+   [row[0] is a directory path that contains jpgfile path], [row[1] is a directory path that contains lblfile path]
+
+   each row represents one sequence of frames. The filename of these frames should be named according to its alphebetical order
+
+   these elements will be called os.listdir() on
+   each files under 1 directory path will be added to img_paths and lbl_paths in VOSDatatset.__getitem__
+
+comment on VOSDatatset
+VOSDatatset[i] gets the resized image and the labels (see __getitem__)
+   lbls_map [uH x nW]: nH number of unique rows; each row is of length nW; all rows below to the first image of the frame
+   lbls_resize [N x C [nH x uH]]: the one-hot vector for each row in N x C. The jth entry in the vector indicates whether it matchs the jth row in lbls_map
+
+
 
 **Post-Process:**  
 ```
@@ -122,3 +137,52 @@ python eval/run_test.py --model-path /path/to/model --L 20 --K 10  --T 0.05 --cr
 
 ## Test-time Adaptation
 To do.
+
+
+### Data format
+data_path: a file where in each row, row[0]=jpgfile, row[1]=fnum
+jpgfile: path to a folder that contains a list of images (sorted by file name to form a video)
+frame_gap: the number of frames between each selected frames
+clip_len: the number of frames selected
+
+
+#### How is data loaded? 
+##### dataset: VideoList
+__getitem__ return 3 tensors
+1. imgs: T x H x W x 3
+   1. img: H x W x 3 (RGB)
+   2. 1 imgs represents 
+2. 0
+3. 0
+
+###### data_loader: DataLoader
+collate_fn inputs a list of return values from __getitem__ and returns a list of imgs. The model eventually only receives the imgs object from __getitem__
+
+#### Model
+##### model: CRW: nn.Module
+self.encoder: resnet18 or otherwise 
+self.selfsim_fc: nn.Sequential that contains the fully connected layer [self.enc_hid_dim, ..., 128]
+
+forward():
+    input: x [B, T, _N*C, H, W]
+    B: batch_size
+    T: frame_counts
+    _N: patch_counts
+    C: channel_counts
+    H: height
+    W: width
+
+    1. add a new dimension for patch _N
+       1. x [B, _N, C, T, H, W]
+    2. pixels_to_nodes
+       1. q [B x C x T x N] node embeddings
+       2. mm [B x N x C x T x H x W]
+
+pixels_to_nodes()
+    convert batch of images to nodes where each pixel is a node
+    output: 
+    1. maps [B x N x C x T x H x W]
+    2. feats [B x C x T x N]  node embeddings
+       1. sum across H and W dimensions
+       2. normalize across C dimensino
+       3. reshape

@@ -92,6 +92,8 @@ class CRW(nn.Module):
                 -- 'maps'  (B x N x C x T x H x W), node feature maps
         '''
         B, N, C, T, h, w = x.shape
+        # B*N, C, H, W
+        #                   B*N, C, T, h, w
         maps = self.encoder(x.flatten(0, 1))
         H, W = maps.shape[-2:]
 
@@ -99,15 +101,23 @@ class CRW(nn.Module):
             maps = self.featdrop(maps)
 
         if N == 1:  # flatten single image's feature map to get node feature 'maps'
+            # B*N, H, W, C, T
             maps = maps.permute(0, -2, -1, 1, 2).contiguous()
+            # B*N*H*W, C, T, 1, 1, which is the same as B*N, C, T, 1, 1
             maps = maps.view(-1, *maps.shape[3:])[..., None, None]
+            # N = H * W
             N, H, W = maps.shape[0] // B, 1, 1
 
         # compute node embeddings by spatially pooling node feature maps
-        feats = maps.sum(-1).sum(-1) / (H*W)
+        feats = maps.sum(-1).sum(-1) / (H*W) # B*N, C, T
+        # B*N, self.enc_hid_dim, T
+        #       B*N, T, self.enc_hid_dim
+        #                       B*N, T, C
         feats = self.selfsim_fc(feats.transpose(-1, -2)).transpose(-1,-2)
         feats = F.normalize(feats, p=2, dim=1)
     
+        # B, self.enc_hid_dim, T, N
+        #                   B, N, self.enc_hid_dim, T
         feats = feats.view(B, N, feats.shape[1], T).permute(0, 2, 3, 1)
         maps  =  maps.view(B, N, *maps.shape[1:])
 

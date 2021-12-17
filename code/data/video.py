@@ -52,8 +52,9 @@ class VideoList(data.Dataset):
             frame_gap -= 1
             readjust = True
 
-        if readjust:
-            print('framegap adjusted to ', frame_gap, 'for', folder_path)
+        # xh2513: too muich printing during training
+        # if readjust:
+        #     print('framegap adjusted to ', frame_gap, 'for', folder_path)
         
         diffnum = fnum - self.clip_len * frame_gap
         if self.random_clip:

@@ -66,10 +66,16 @@ def try_np_load(p):
         return None
 
 def make_lbl_set(lbls):
+    # this function extracts the unique set of rows in the 1st frame across color channels
+    # the unique set of rows is sorted by the value at each row
+    # N x C x nH x nW where N is the length of the sequence
     lbl_set = [np.zeros(3).astype(np.uint8)]
     count_lbls = [0]    
     
+    # [C x nH] x nW
     flat_lbls_0 = lbls[0].copy().reshape(-1, lbls.shape[-1]).astype(np.uint8)
+    # unique is like a set method
+    # uH x nW 
     lbl_set = np.unique(flat_lbls_0, axis=0)
 
     return lbl_set
@@ -215,18 +221,22 @@ class VOSDataset(torch.utils.data.Dataset):
 
             imgs_orig.append(img_orig)
             imgs.append(img)
+            # list of CxnHxnW
             lbls.append(lblimg.copy())
+            # list of CxnHxnW
             
         # Meta info
         meta = dict(folder_path=folder_path, img_paths=img_paths, lbl_paths=lbl_paths)
 
         ########################################################
         # Load reshaped label information (load cached versions if possible)
-        lbls = np.stack(lbls)
+        lbls = np.stack(lbls) # N x C x nH x nW where N is the length of the sequence
         prefix = '/' + '/'.join(lbl_paths[0].split('.')[:-1])
 
         # Get lblset
         lblset_path = "%s_%s.npy" % (prefix, 'lblset')
+        # uH x nW
+        # unique rows in lbls
         lblset = make_lbl_set(lbls)
 
         if np.all((lblset[1:] - lblset[:-1]) == 1):
@@ -253,6 +263,14 @@ class VOSDataset(torch.utils.data.Dataset):
             onehot = try_np_load(oh_path) 
             if onehot is None:
                 print('computing onehot lbl for', oh_path)
+                # for each frame and each color channel, whether row i matches with 
+                # the row j in lblset
+                # with the 
+                #        C x [nH x uH]
+                #                  a list of C x nH
+                #                  [C x nH] the collective truth value for each width
+                #                         (C x nH x nW)
+                #                         (C x nH x nW == nW)
                 onehot = np.stack([np.all(lbls[i] == ll, axis=-1) for ll in lblset], axis=-1)
                 np.save(oh_path, onehot)
 
@@ -280,12 +298,13 @@ class VOSDataset(torch.utils.data.Dataset):
         ########################################################
         
         imgs = torch.stack(imgs)
+        # list of NxCxnHxnW
         imgs_orig = torch.stack(imgs_orig)
+        # N x C x [nH x uH]
         lbls_tensor = torch.from_numpy(np.stack(lbls))
         lbls_resize = np.stack(resizes)
 
         assert lbls_resize.shape[0] == len(meta['lbl_paths'])
-
         return imgs, imgs_orig, lbls_resize, lbls_tensor, lblset, meta
 
     def __len__(self):
